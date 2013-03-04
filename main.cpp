@@ -35,6 +35,7 @@ HWND    gTargetWindowHwnd = NULL;
 HWND	NextHwndParent = NULL;
 INT		PosArray[4][3];
 HWND	NextWidgetsHwnd[4][3];
+CSerial serial;
 
 //BOOL ListProcessThreads( DWORD dwOwnerPID );
 //void printError( TCHAR* msg );
@@ -70,7 +71,6 @@ int main()
 		return 0;
 	}
 
-	CSerial serial;
 	serial.Open(_T("COM1"));
 	serial.Setup(CSerial::EBaud9600,CSerial::EData8,CSerial::EParNone,CSerial::EStop1);
 	serial.SetupHandshaking(CSerial::EHandshakeHardware);
@@ -188,6 +188,16 @@ int main()
 		cout << rectangle.bottom << endl;*/
 	}
 
+	if (!serial.IsOpen())
+	{
+		cout << "Cannot connect to serial port. exiting..." << endl;
+		system("PAUSE");
+
+		serial.Close();
+		TerminateProcess(process_info.hProcess, 0);
+		return 0;
+	}
+
 	cout << endl << "Press enter anytime to stop analyzing data and exit" << endl << endl;
 
 	while (!(GetAsyncKeyState(VK_RETURN) & 0x8000))
@@ -248,7 +258,23 @@ VOID ProcessColours()
 									(dimentions.right/2), 
 									(dimentions.bottom/2));
 
+#define WHITE	0x00ffffff
+#define BLACK	0x00000000
+#define RED		0x00ff0000
+#define BLUE	0x000000ff
+#define YELLOW	0x00ffff00
+#define GREEN	0x0000ff00
+
 	cout << "\r" << (PDWORD)colorTheta << " " << (PDWORD)colorAlpha << " " << (PDWORD)colorBeta << " " << (PDWORD)colorDelta << flush;
+
+	if (colorBeta == RED)
+		serial.Write("1");
+	else if (colorBeta == GREEN)
+		serial.Write("3");
+	else if (colorBeta == YELLOW)
+		serial.Write("5");
+	else
+		serial.Write("0");
 }
 
 
