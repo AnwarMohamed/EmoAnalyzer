@@ -1,0 +1,4 @@
+VERSION:3 SOURCE_TIMESTAMP:426956AE
+NODE:I LEVEL:0 LINE:24 "C:\cvavr2\inc\mega32.h"
+NODE:I LEVEL:0 LINE:27 "C:\cvavr2\inc\stdio.h"
+NODE:F LEVEL:0 LINE:31 "main(void)"
