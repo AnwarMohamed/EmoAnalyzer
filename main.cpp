@@ -22,11 +22,8 @@
 #include <iostream>
 #include <tlhelp32.h>
 #include <tchar.h>
-#include <gdiplus.h>
 #include "Serial.h"
 
-using namespace Gdiplus;
-#pragma comment (lib,"Gdiplus.lib")
 
 using namespace std;
 
@@ -37,12 +34,12 @@ INT		PosArray[4][3];
 HWND	NextWidgetsHwnd[4][3];
 CSerial serial;
 
-//BOOL ListProcessThreads( DWORD dwOwnerPID );
-//void printError( TCHAR* msg );
 BOOL CALLBACK myWNDENUMPROC(HWND hwCurHwnd, LPARAM lpMylp);
 VOID ProcessColours();
-//PBITMAPINFO CreateBitmapInfoStruct(HWND hwnd, HBITMAP hBmp);
-//void CreateBMPFile(HWND hwnd, LPTSTR pszFile, PBITMAPINFO pbi, HBITMAP hBMP, HDC hDC);
+void RgbToHsb(struct RGB_t rgb, struct HSB_t* outHsb);
+
+typedef struct RGB_t { unsigned char red, green, blue; } RGB;
+typedef struct HSB_t { float hue, saturation, brightness; } HSB;
 
 int main()
 {
@@ -50,6 +47,9 @@ int main()
 	cout << "*                                                *" << endl;
 	cout << "*         Emotiv EPOC Brain Activity Map         *" << endl;
 	cout << "*           Serial Port Control Server           *" << endl;
+	cout << "*   By Anwar Mohamed <anwarelmakrahy@gmail.com>  *" << endl;
+	cout << "*         Programmed for project name:           *" << endl;
+	cout << "*      How to control objects using your mind    *" << endl;
 	cout << "*                                                *" << endl;
 	cout << "**************************************************" << endl;
 
@@ -71,21 +71,11 @@ int main()
 		return 0;
 	}
 
-	serial.Open(_T("COM1"));
-	serial.Setup(CSerial::EBaud9600,CSerial::EData8,CSerial::EParNone,CSerial::EStop1);
-	serial.SetupHandshaking(CSerial::EHandshakeHardware);
-
-	//serial.Write("1");
-	
-
 	Sleep(3000);
 
 	gPidToFind = process_info.dwProcessId;
 	EnumWindows(myWNDENUMPROC, process_info.dwProcessId);
-	//ListProcessThreads(gPidToFind);
 	
-	//_tprintf( TEXT("\n     parent hWnd = %08x\n\n"), gTargetWindowHwnd );
-
 	NextHwndParent = FindWindowEx(gTargetWindowHwnd, NULL, NULL, NULL);
 	NextHwndParent = FindWindowEx(gTargetWindowHwnd, NextHwndParent, NULL, NULL);
 	HWND WidgetsHwnd [4];
@@ -127,7 +117,6 @@ int main()
 	{
 		Sleep(500);
 		NextWidgetsHwnd[m][2] = FindWindowEx(NextWidgetsHwnd[m][2], NULL, NULL, NULL);
-		//cout << (PDWORD)NextWidgetsHwnd[m][2] << endl;
 	}
 
 	/*
@@ -140,8 +129,6 @@ int main()
 	RECT rectangle;
 	for (int k=0; k<4; k++)
 	{
-		//cout << k+1 << endl;
-
 		GetWindowRect(NextWidgetsHwnd[k][2], &rectangle);
 		if (GetDeviceCaps( GetDC(NextWidgetsHwnd[k][2]), BITSPIXEL ) == CM_NONE)
 		{
@@ -153,42 +140,17 @@ int main()
 		}
 
 		PosArray[k][0] = rectangle.top;
-		//cout << PosArray[k][0] << endl;
 		PosArray[k][1] = rectangle.bottom;
-		//cout << PosArray[k][1] << endl;
 		PosArray[k][2] = rectangle.left;
-		//cout << PosArray[k][2] << endl;
 		PosArray[k][3] = rectangle.right;
-		//cout << PosArray[k][3] << endl << endl;
 
-		/*save capture*/
-		/*HDC hDC       = GetDC(NextWidgetsHwnd[k][2]);
-		HDC hTargetDC = CreateCompatibleDC( hDC );
-
-		HBITMAP hBitmap = CreateCompatibleBitmap( hDC,	rectangle.right - rectangle.left, 
-														rectangle.bottom - rectangle.top );
-		SelectObject( hTargetDC, hBitmap );
-		
-		Sleep(100);
-		PrintWindow( NextWidgetsHwnd[k][2], hTargetDC, PW_CLIENTONLY );
-
-		Sleep(100);
-		CreateBMPFile( NextWidgetsHwnd[k][2], 
-			TEXT("D:\\test.bmp") ,
-			CreateBitmapInfoStruct(NextWidgetsHwnd[k][2], hBitmap), 
-			hBitmap, hTargetDC);
-
-		DeleteObject( hBitmap );
-		ReleaseDC( NextWidgetsHwnd[k][2], hDC );
-		DeleteDC( hTargetDC );
-
-
-		GetClientRect(NextWidgetsHwnd[k][2], &rectangle);
-		cout << rectangle.right << endl;
-		cout << rectangle.bottom << endl;*/
 	}
 
-	if (!serial.IsOpen())
+	int serial_port;
+	cout << endl << "Please enter serial port number: ";
+	cin >> serial_port;
+
+	if (!serial.Open(serial_port, 9600))
 	{
 		cout << "Cannot connect to serial port. exiting..." << endl;
 		system("PAUSE");
@@ -200,13 +162,14 @@ int main()
 
 	cout << endl << "Press enter anytime to stop analyzing data and exit" << endl << endl;
 
-	while (!(GetAsyncKeyState(VK_RETURN) & 0x8000))
+	while (!(GetAsyncKeyState(VK_ESCAPE) & 0x8000))
 	//for(int i=0; i<2; i++)
 	{
-		Sleep(1000);
+		Sleep(2000);
 		ProcessColours();
 	}
 
+	cout << endl;
 	system("PAUSE");
 
 	serial.Close();
@@ -265,221 +228,76 @@ VOID ProcessColours()
 #define YELLOW	0x00ffff00
 #define GREEN	0x0000ff00
 
-	cout << "\r" << (PDWORD)colorTheta << " " << (PDWORD)colorAlpha << " " << (PDWORD)colorBeta << " " << (PDWORD)colorDelta << flush;
+	RGB color;
+	color.red = GetRValue(colorBeta);
+	color.blue = GetBValue(colorBeta);
+	color.green = GetGValue(colorBeta);
 
-	if (colorBeta == RED)
-		serial.Write("1");
-	else if (colorBeta == GREEN)
-		serial.Write("3");
-	else if (colorBeta == YELLOW)
-		serial.Write("5");
+	//memset(&color, 155 , sizeof(RGB));
+	//color = { 0, 0, 0 };
+	
+    struct HSB_t hsb;
+    RgbToHsb(color, &hsb);
+
+    //printf("RGB(%u,%u,%u) -> HSB(%f,%f,%f)\n", color.red, color.green, color.blue, hsb.hue, hsb.saturation, hsb.brightness * 100);
+
+	if (hsb.hue  >= 0 && hsb.hue < 60 && hsb.saturation  > 0)
+	{
+		cout <<  "red region" << endl;
+		serial.SendData("1", 1);
+	}
+	else if (hsb.hue  >= 60 && hsb.hue < 120 && hsb.saturation  > 0)
+	{
+		cout << "yellow region" << endl;
+		serial.SendData("2", 1);
+	} 
+	else if (hsb.hue >= 120 && hsb.hue < 180 && hsb.saturation  > 0)
+	{
+		cout << "green region" << endl;
+		serial.SendData("3", 1);
+	}
 	else
-		serial.Write("0");
+		serial.SendData("0", 1);
+
+	cout<< hsb.hue << "%" << endl;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-/*BOOL ListProcessThreads( DWORD dwOwnerPID ) 
-{ 
-	HANDLE hThreadSnap = INVALID_HANDLE_VALUE; 
-	THREADENTRY32 te32; 
-  
-	hThreadSnap = CreateToolhelp32Snapshot( TH32CS_SNAPTHREAD, 0 ); 
-	if( hThreadSnap == INVALID_HANDLE_VALUE ) 
-	return( FALSE ); 
-  
-	te32.dwSize = sizeof(THREADENTRY32 ); 
- 
-	if( !Thread32First( hThreadSnap, &te32 ) ) 
-	{
-		printError( TEXT("Thread32First") );
-		CloseHandle( hThreadSnap );
-		return( FALSE );
-	}
-
-	do 
-	{ 
-		if( te32.th32OwnerProcessID == dwOwnerPID )
-		{
-			_tprintf( TEXT("\n     THREAD ID      = 0x%08X"), te32.th32ThreadID ); 
-			_tprintf( TEXT("\n     base priority  = %d"), te32.tpBasePri ); 
-			_tprintf( TEXT("\n     delta priority = %d"), te32.tpDeltaPri ); 
-		}
-	} while( Thread32Next(hThreadSnap, &te32 ) );
-
-	_tprintf( TEXT("\n\n"));
-
-	CloseHandle( hThreadSnap );
-	return( TRUE );
-}*/
-
-/*void printError( TCHAR* msg )
+void RgbToHsb(struct RGB_t rgb, struct HSB_t* outHsb)
 {
-	DWORD eNum;
-	TCHAR sysMsg[256];
-	TCHAR* p;
+    // TODO check arguments
 
-	eNum = GetLastError( );
-	FormatMessage( FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-			NULL, eNum,
-			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-			sysMsg, 256, NULL );
-
-	p = sysMsg;
-	while( ( *p > 31 ) || ( *p == 9 ) )
-	++p;
-	do { *p-- = 0; } while( ( p >= sysMsg ) &&
-							( ( *p == '.' ) || ( *p < 33 ) ) );
-
-	_tprintf( TEXT("\n  WARNING: %s failed with error %d (%s)"), msg, eNum, sysMsg );
-}*/
-
-
-/*PBITMAPINFO CreateBitmapInfoStruct(HWND hwnd, HBITMAP hBmp)
-{ 
-    BITMAP bmp; 
-    PBITMAPINFO pbmi; 
-    WORD    cClrBits; 
-
-    // Retrieve the bitmap color format, width, and height.  
-    if (!GetObject(hBmp, sizeof(BITMAP), (LPSTR)&bmp)) 
-		cout << "Error: GetObject" << endl; 
-
-    // Convert the color format to a count of bits.  
-    cClrBits = (WORD)(bmp.bmPlanes * bmp.bmBitsPixel); 
-    if (cClrBits == 1) 
-        cClrBits = 1; 
-    else if (cClrBits <= 4) 
-        cClrBits = 4; 
-    else if (cClrBits <= 8) 
-        cClrBits = 8; 
-    else if (cClrBits <= 16) 
-        cClrBits = 16; 
-    else if (cClrBits <= 24) 
-        cClrBits = 24; 
-    else cClrBits = 32; 
-
-    // Allocate memory for the BITMAPINFO structure. (This structure  
-    // contains a BITMAPINFOHEADER structure and an array of RGBQUAD  
-    // data structures.)  
-
-     if (cClrBits < 24) 
-         pbmi = (PBITMAPINFO) LocalAlloc(LPTR, 
-                    sizeof(BITMAPINFOHEADER) + 
-                    sizeof(RGBQUAD) * (1<< cClrBits)); 
-
-     // There is no RGBQUAD array for these formats: 24-bit-per-pixel or 32-bit-per-pixel 
-
-     else 
-         pbmi = (PBITMAPINFO) LocalAlloc(LPTR, 
-                    sizeof(BITMAPINFOHEADER)); 
-
-    // Initialize the fields in the BITMAPINFO structure.  
-
-    pbmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER); 
-    pbmi->bmiHeader.biWidth = bmp.bmWidth; 
-    pbmi->bmiHeader.biHeight = bmp.bmHeight; 
-    pbmi->bmiHeader.biPlanes = bmp.bmPlanes; 
-    pbmi->bmiHeader.biBitCount = bmp.bmBitsPixel; 
-    if (cClrBits < 24) 
-        pbmi->bmiHeader.biClrUsed = (1<<cClrBits); 
-
-    // If the bitmap is not compressed, set the BI_RGB flag.  
-    pbmi->bmiHeader.biCompression = BI_RGB; 
-
-    // Compute the number of bytes in the array of color  
-    // indices and store the result in biSizeImage.  
-    // The width must be DWORD aligned unless the bitmap is RLE 
-    // compressed. 
-    pbmi->bmiHeader.biSizeImage = ((pbmi->bmiHeader.biWidth * cClrBits +31) & ~31) /8
-                                  * pbmi->bmiHeader.biHeight; 
-    // Set biClrImportant to 0, indicating that all of the  
-    // device colors are important.  
-     pbmi->bmiHeader.biClrImportant = 0; 
-     return pbmi; 
- } */
-
-/*void CreateBMPFile(HWND hwnd, LPTSTR pszFile, PBITMAPINFO pbi, 
-                  HBITMAP hBMP, HDC hDC) 
- { 
-     HANDLE hf;                 // file handle  
-    BITMAPFILEHEADER hdr;       // bitmap file-header  
-    PBITMAPINFOHEADER pbih;     // bitmap info-header  
-    LPBYTE lpBits;              // memory pointer  
-    DWORD dwTotal;              // total count of bytes  
-    DWORD cb;                   // incremental count of bytes  
-    BYTE *hp;                   // byte pointer  
-    DWORD dwTmp; 
-
-    pbih = (PBITMAPINFOHEADER) pbi; 
-    lpBits = (LPBYTE) GlobalAlloc(GMEM_FIXED, pbih->biSizeImage);
-
-    if (!lpBits) 
-		cout << "Error: GlobalAlloc" << endl;
-
-    // Retrieve the color table (RGBQUAD array) and the bits  
-    // (array of palette indices) from the DIB.  
-    if (!GetDIBits(hDC, hBMP, 0, (WORD) pbih->biHeight, lpBits, pbi, 
-        DIB_RGB_COLORS)) 
+    float r = rgb.red / 255.0f;
+    float g = rgb.green / 255.0f;
+    float b = rgb.blue / 255.0f;
+    float max = max(max(r, g), b);
+    float min = min(min(r, g), b);
+    float delta = max - min;
+    if (delta != 0)
     {
-		cout << "Error: GetDIBits" << endl; 
+        float hue;
+        if (r == max)
+        {
+            hue = (g - b) / delta;
+        }
+        else
+        {
+            if (g == max)
+            {
+                hue = 2 + (b - r) / delta;
+            }
+            else
+            {
+                hue = 4 + (r - g) / delta;
+            }
+        }
+        hue *= 60;
+        if (hue < 0) hue += 360;
+        outHsb->hue = hue;
     }
-
-    // Create the .BMP file.  
-    hf = CreateFile(pszFile, 
-                   GENERIC_READ | GENERIC_WRITE, 
-                   (DWORD) 0, 
-                    NULL, 
-                   CREATE_ALWAYS, 
-                   FILE_ATTRIBUTE_NORMAL, 
-                   (HANDLE) NULL); 
-    if (hf == INVALID_HANDLE_VALUE) 
-        cout << "Error: WriteFile" << endl; 
-    hdr.bfType = 0x4d42;        // 0x42 = "B" 0x4d = "M"  
-    // Compute the size of the entire file.  
-    hdr.bfSize = (DWORD) (sizeof(BITMAPFILEHEADER) + 
-                 pbih->biSize + pbih->biClrUsed 
-                 * sizeof(RGBQUAD) + pbih->biSizeImage); 
-    hdr.bfReserved1 = 0; 
-    hdr.bfReserved2 = 0; 
-
-    // Compute the offset to the array of color indices.  
-    hdr.bfOffBits = (DWORD) sizeof(BITMAPFILEHEADER) + 
-                    pbih->biSize + pbih->biClrUsed 
-                    * sizeof (RGBQUAD); 
-
-    // Copy the BITMAPFILEHEADER into the .BMP file.  
-    if (!WriteFile(hf, (LPVOID) &hdr, sizeof(BITMAPFILEHEADER), 
-        (LPDWORD) &dwTmp,  NULL)) 
+    else
     {
-       cout << "Error: WriteFile" << endl; 
+        outHsb->hue = 0;
     }
-
-    // Copy the BITMAPINFOHEADER and RGBQUAD array into the file.  
-    if (!WriteFile(hf, (LPVOID) pbih, sizeof(BITMAPINFOHEADER) 
-                  + pbih->biClrUsed * sizeof (RGBQUAD), 
-                  (LPDWORD) &dwTmp, ( NULL)))
-        cout << "Error: WriteFile" << endl;
-
-    // Copy the array of color indices into the .BMP file.  
-    dwTotal = cb = pbih->biSizeImage; 
-    hp = lpBits; 
-    if (!WriteFile(hf, (LPSTR) hp, (int) cb, (LPDWORD) &dwTmp,NULL)) 
-           cout << "Error: WriteFile" << endl; 
-
-    // Close the .BMP file.  
-     if (!CloseHandle(hf)) 
-           cout << "Error: CloseHandle" << endl; 
-
-    // Free memory.  
-    GlobalFree((HGLOBAL)lpBits);
-}*/
+    outHsb->saturation = max == 0 ? 0 : (max - min) / max;
+    outHsb->brightness = max;
+}
